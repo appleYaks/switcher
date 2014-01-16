@@ -16,7 +16,7 @@ var utils = require('./utils');
  * activated, so Swticher handles that case.
  *
  * @api   public
- * @param {Class} opts A configuration object
+ * @param {Object} opts A configuration object.
  */
 function Switcher (opts) {
   this.config = {
@@ -37,6 +37,7 @@ function Switcher (opts) {
  */
 Switcher.prototype.init = function () {
   this.registerLockEvent();
+  return this;
 };
 
 /**
@@ -47,6 +48,12 @@ Switcher.prototype.init = function () {
  */
 Switcher.prototype._interfacePromise = null;
 
+/**
+ * Get the DBus interface to query for Screen locking.
+ *
+ * @api    public
+ * @return {Promise} A promise to chain methods to.
+ */
 Switcher.prototype.getInterface = function () {
   var self = this;
 
@@ -72,6 +79,13 @@ Switcher.prototype.getInterface = function () {
   return promise;
 };
 
+/**
+ * Register a callback for when the lock/unlock message
+ * is triggered from the DBus after a screen lock/unlock event.
+ *
+ * @api    private
+ * @return {Switcher} The switcher object for chaining.
+ */
 Switcher.prototype.registerLockEvent = function () {
   var self = this;
 
@@ -80,16 +94,33 @@ Switcher.prototype.registerLockEvent = function () {
   }).catch(function (err) {
     console.error('There was an error getting the interface: ', err);
   });
+
+  return this;
 };
 
+/**
+ * A callback that's called when the screen is locked or unlocked.
+ *
+ * @api    private
+ * @param  {boolean} locked Tells whether the screen is locked or unlocked.
+ * @return {Switcher}       The switcher object for chaining.
+ */
 Switcher.prototype.screenLockChanged = function (locked) {
   if (locked === true) {
     console.log('screen is locked!');
   } else {
     console.log('screen is unlocked!');
   }
+
+  return this;
 };
 
+/**
+ * Determines if the screen is locked.
+ *
+ * @api    public
+ * @return {Promise} A promise that will return a boolean for locked/unlocked.
+ */
 Switcher.prototype.checkIfLocked = function () {
   var self = this;
 
@@ -98,6 +129,14 @@ Switcher.prototype.checkIfLocked = function () {
   });
 };
 
+/**
+ * Private function that determines if the screen is locked.
+ * This actually generates the promised used in the public method.
+ *
+ * @api    private
+ * @param  {Object} iface The handle for the DBus interface.
+ * @return {Promise}      A promise returning the boolean for locked/unlocked.
+ */
 Switcher.prototype._getLockActive = function (iface) {
   var promise = new RSVP.Promise(function (resolve, reject) {
     iface.GetActive.timeout = 0;
@@ -108,6 +147,13 @@ Switcher.prototype._getLockActive = function (iface) {
   return promise;
 };
 
+/**
+ * Queries gsettings for the system session configuration of how long
+ * a delay should be before the system is determined to be idle.
+ *
+ * @api    public
+ * @return {Promise} A promise returning the number of seconds of inactivity before the session is considered idle.
+ */
 Switcher.prototype.getIdleSetting = function () {
   var promise = new RSVP.Promise(function (resolve, reject) {
     var child = exec('gsettings get org.cinnamon.desktop.session idle-delay', {
@@ -129,6 +175,12 @@ Switcher.prototype.getIdleSetting = function () {
   return promise;
 };
 
+/**
+ * Queries the X server for the user's idle time thus far.
+ *
+ * @api    public
+ * @return {Promise} The user's idle time so far, in milliseconds.
+ */
 Switcher.prototype.getIdleTime = function () {
   var promise = new RSVP.Promise(function (resolve, reject) {
     var child = exec('xprintidle', {
@@ -146,6 +198,12 @@ Switcher.prototype.getIdleTime = function () {
   return promise;
 };
 
+/**
+ * Uses xset's DPMS feature to tell whether the screen is currently powered off.
+ *
+ * @api    public
+ * @return {Promise} A promise returning a boolean telling whether the screen is currently off.
+ */
 Switcher.prototype.isMonitorOff = function () {
   var self = this;
 
@@ -168,8 +226,13 @@ Switcher.prototype.isMonitorOff = function () {
   return promise;
 };
 
-
-function switch_vt () {
+/**
+ * Switches the virtual terminal to tty1 and back to tt7 in order to force X to repaint the screen.
+ *
+ * @api    public
+ * @return {Promise} A promise that fires when the switching has completed.
+ */
+Switcher.prototype.switchVirtualTerminal = function () {
   // if isMonitorOff ; then
   //   echo 'monitor is off now. switching vts...'
   //   sudo chvt 1
@@ -180,6 +243,6 @@ function switch_vt () {
 
   // echo "monitor wasn't off. not switching vts."
   // return 1
-}
+};
 
 module.exports = Switcher;
