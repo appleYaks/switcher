@@ -23,6 +23,7 @@ function Switcher (opts) {
     service: 'org.cinnamon.ScreenSaver',
     path: '/org/cinnamon/ScreenSaver',
     innaface: 'org.cinnamon.ScreenSaver',
+    gsetting: 'org.cinnamon.desktop.session idle-delay',
     timeoutCheckDPMS: 3000
   };
 
@@ -222,8 +223,10 @@ Switcher.prototype._getLockActive = function (iface) {
  * @return {Promise} A promise returning the number of seconds of inactivity before the session is considered idle.
  */
 Switcher.prototype.getIdleSetting = function () {
+  var self = this;
+
   var promise = new RSVP.Promise(function (resolve, reject) {
-    var child = exec('gsettings get org.cinnamon.desktop.session idle-delay', {
+    var child = exec('gsettings get ' + self.config.gsetting, {
       encoding: 'utf8'
     }, function (err, stdout, stderr) {
       if (err || stderr) {
