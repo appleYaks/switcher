@@ -90,7 +90,7 @@ Switcher.prototype.registerLockEvent = function () {
   var self = this;
 
   self.getInterface().then(function (iface) {
-    iface.on('ActiveChanged', self.screenLockChanged);
+    iface.on('ActiveChanged', self.screenLockChanged.bind(self));
   }).catch(function (err) {
     console.error('There was an error getting the interface: ', err);
   });
@@ -99,20 +99,87 @@ Switcher.prototype.registerLockEvent = function () {
 };
 
 /**
- * A callback that's called when the screen is locked or unlocked.
+ * A callback that's called by DBus when the screen is locked or unlocked.
  *
  * @api    private
  * @param  {boolean} locked Tells whether the screen is locked or unlocked.
- * @return {Switcher}       The switcher object for chaining.
+ * @return {undefined}      A return value isn't useful here as this function's being called by a DBus event.
  */
 Switcher.prototype.screenLockChanged = function (locked) {
+  var self = this;
+
   if (locked === true) {
     console.log('screen is locked!');
   } else {
-    console.log('screen is unlocked!');
+    console.log('screen is unlocked.')
+    return;
   }
 
-  return this;
+  self.isMonitorOff()
+    // monitor is off
+    .then(function () {
+      console.log('screen was off when locked -- switching terminals');
+      return self.switchVirtualTerminal();
+    })
+    // monitor is still on
+    .catch(function () {
+        console.log('screen was still on when locked -- calculating recheck delay')
+        self._calculateRecheckDelay()
+          .then(function (stillLocked) {
+            console.log('screen was still locked after delay -- recursing!')
+            self.screenLockChanged(stillLocked);
+          })
+          .catch(function (err) {
+            console.log('Something went wrong in checking the screen after a delay: ', err);
+            throw new Error('Something went wrong in checking the screen after a delay: ', err);
+          });
+    });
+};
+
+Switcher.prototype._calculateRecheckDelay = function () {
+  var self = this;
+
+  return RSVP.hash({
+    idleSetting: self.getIdleSetting(),
+    idleTime: self.getIdleTime()
+  }).then(function (hash) {
+    var delay = hash.idleSetting - hash.idleTime;
+    console.log('idleSetting was: %s. idleTime was: %s. delay is: %s', hash.idleSetting, hash.idleTime, delay);
+
+    // add a few seconds to the delay just in case
+    delay += 5;
+
+    // trigger a delayed recheck of the screen lock && screen off
+    return self._delayedRecheck(delay);
+  }).catch(function (err) {
+    if (err instanceof Error) {
+      console.error('There was an error in calculating the proper recheck delay: ', err);
+    } else if (typeof err === 'object' && err.length) {
+      console.error('There were ' + err.length + ' error(s) in calculating the proper recheck delay: ', err);
+    } else {
+      console.log('Some kind of random error occured:', err);
+    }
+  });
+};
+
+Switcher.prototype._delayedRecheck = function (delay) {
+  var self = this;
+
+  var promise = new RSVP.Promise(function (resolve, reject) {
+    setTimeout(function () {
+      self.checkIfLocked()
+        .then(resolve)
+        // should never happen -- checkIfLocked doesn't throw errors
+        .catch(function (err) {
+          if (err) {
+            console.error('There was an error in checking if the screen was locked: ', err);
+            throw err;
+          }
+        });
+    }, delay * 1000);
+  });
+
+  return promise;
 };
 
 /**
@@ -179,7 +246,7 @@ Switcher.prototype.getIdleSetting = function () {
  * Queries the X server for the user's idle time thus far.
  *
  * @api    public
- * @return {Promise} The user's idle time so far, in milliseconds.
+ * @return {Promise} The user's idle time so far, in seconds.
  */
 Switcher.prototype.getIdleTime = function () {
   var promise = new RSVP.Promise(function (resolve, reject) {
@@ -190,7 +257,7 @@ Switcher.prototype.getIdleTime = function () {
         return reject(err || stderr);
       }
 
-      var idleTime = parseInt(stdout, 10);
+      var idleTime = parseInt(stdout, 10) / 1000;
       return resolve(idleTime);
     });
   });
