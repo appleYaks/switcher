@@ -202,7 +202,7 @@ Switcher.prototype.getIdleTime = function () {
  * Uses xset's DPMS feature to tell whether the screen is currently powered off.
  *
  * @api    public
- * @return {Promise} A promise returning a boolean telling whether the screen is currently off.
+ * @return {Promise} A promise that resolves if the screen is off and rejects if the screen is on or if there's an error/stderror.
  */
 Switcher.prototype.isMonitorOff = function () {
   var self = this;
@@ -218,7 +218,13 @@ Switcher.prototype.isMonitorOff = function () {
         }
 
         var screenOff = /Monitor is Off/.test(stdout);
-        return resolve(screenOff);
+        if (screenOff) {
+          return resolve(screenOff);
+        }
+
+        // reject if screen is on in order to chain
+        // promises more easily on the resolve code path
+        return reject(new Error('Screen is still on.'));
       });
     }, self.config.timeoutCheckDPMS);
   });
@@ -233,16 +239,41 @@ Switcher.prototype.isMonitorOff = function () {
  * @return {Promise} A promise that fires when the switching has completed.
  */
 Switcher.prototype.switchVirtualTerminal = function () {
-  // if isMonitorOff ; then
-  //   echo 'monitor is off now. switching vts...'
-  //   sudo chvt 1
-  //   sleep .1
-  //   sudo chvt 7
-  //   return 0
-  // fi
+  // create an "immediate" promise to kick off the creation
+  // of the functions that in turn create the promises that
+  // manage the switching of virtual terminals.
+  return RSVP.resolve()
+    .then(this._chvt(1))
+    .then(this._chvt(7))
+    .catch(function (err) {
+      console.error('There was an error switching virtual terminals:', err);
+      throw err;
+    });
+};
 
-  // echo "monitor wasn't off. not switching vts."
-  // return 1
+/**
+ * Return a function that should be called as a parameter to a `.then`,
+ * which returns a promise after the virtual terminal has been switched.
+ *
+ * @api    private
+ * @param  {Number} ttyNum The number of the tty you want to switch to.
+ * @return {Function}      A function to be called as a parameter to `.then()`, and returns a promise.
+ */
+Switcher.prototype._chvt = function (ttyNum) {
+  return function () {
+    var promise = new RSVP.Promise(function (resolve, reject) {
+      var child = exec('sudo chvt ' + ttyNum, {
+        encoding: 'utf8'
+      }, function (err, stdout, stderr) {
+        if (err || stderr) {
+          return reject(err || stderr);
+        }
+        return resolve();
+      });
+    });
+
+    return promise;
+  };
 };
 
 module.exports = Switcher;
