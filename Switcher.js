@@ -119,7 +119,7 @@ Switcher.prototype.screenLockChanged = function (locked) {
     // monitor is off
     .then(function () {
       console.log('screen was off when locked -- switching terminals');
-      return self.switchVirtualTerminal();
+      return self.switchVirtualTerminal().then(self.turnScreenOff);
     })
     // monitor is still on
     .catch(function () {
@@ -341,6 +341,21 @@ Switcher.prototype._chvt = function (ttyNum) {
 
     return promise;
   };
+};
+
+Switcher.prototype.turnScreenOff = function () {
+    var promise = new RSVP.Promise(function (resolve, reject) {
+      var child = exec('xset dpms force off', {
+        encoding: 'utf8'
+      }, function (err, stdout, stderr) {
+        if (err || stderr) {
+          return reject(err || stderr);
+        }
+        return resolve();
+      });
+    });
+
+    return promise;
 };
 
 module.exports = Switcher;
