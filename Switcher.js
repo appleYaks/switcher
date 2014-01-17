@@ -10,8 +10,9 @@ var utils = require('./utils');
 
 
 // catch any errors from promises missing a 'catch' function
-RSVP.on('error', function(event) {
-  console.assert(false, event.detail);
+RSVP.on('error', function(err) {
+  console.log('catch-all caught an error: ', err);
+  console.assert(false, err);
 });
 
 /**
@@ -96,11 +97,13 @@ Switcher.prototype.getInterface = function () {
 Switcher.prototype.registerLockEvent = function () {
   var self = this;
 
-  self.getInterface().then(function (iface) {
-    iface.on('ActiveChanged', self.screenLockChanged.bind(self));
-  }).catch(function (err) {
-    console.error('There was an error getting the interface: ', err);
-  });
+  self.getInterface()
+    .then(function (iface) {
+      iface.on('ActiveChanged', self.screenLockChanged.bind(self));
+    })
+    .catch(function (err) {
+      console.error('There was an error getting the interface: ', err);
+    });
 
   return this;
 };
@@ -118,7 +121,7 @@ Switcher.prototype.screenLockChanged = function (locked) {
   if (locked === true) {
     console.log('screen is locked!');
   } else {
-    console.log('screen is unlocked.')
+    console.log('screen is unlocked.');
     return;
   }
 
@@ -126,20 +129,34 @@ Switcher.prototype.screenLockChanged = function (locked) {
     // monitor is off
     .then(function () {
       console.log('screen was off when locked -- switching terminals');
-      return self.switchVirtualTerminal().then(self.turnScreenOff);
-    })
+
+      return self.switchVirtualTerminal()
+        .then(self.turnScreenOff, function (err) {
+          console.error('There was an error switching virtual terminals: ', err);
+        })
+        .then(null, function (err) {
+          console.error('There was an error turning the screen off: ', err);
+        });
     // monitor is still on
-    .catch(function () {
-        console.log('screen was still on when locked -- calculating recheck delay')
-        self._calculateRecheckDelay()
-          .then(function (stillLocked) {
-            console.log('screen was still locked after delay -- recursing!')
-            self.screenLockChanged(stillLocked);
-          })
-          .catch(function (err) {
-            console.log('Something went wrong in checking the screen after a delay: ', err);
-            throw new Error('Something went wrong in checking the screen after a delay: ', err);
-          });
+    }, function () {
+      console.log('screen is still on -- calculating recheck delay');
+
+      self._calculateRecheckDelay()
+        .then(function (stillLocked) {
+          if (!stillLocked) {
+            console.log('screen is found unlocked after delay. nothing to be done.');
+            return;
+          }
+
+          console.log('delay is up -- trying again');
+
+          self.screenLockChanged(stillLocked);
+        }, function (err) {
+          console.error('There was an error in calculating the proper recheck delay: ', err);
+        });
+    })
+    .catch(function (err) {
+      console.error('There was an error in the screen lock DBus callback: ', err);
     });
 };
 
@@ -151,21 +168,14 @@ Switcher.prototype._calculateRecheckDelay = function () {
     idleTime: self.getIdleTime()
   }).then(function (hash) {
     var delay = hash.idleSetting - hash.idleTime;
-    console.log('idleSetting was: %s. idleTime was: %s. delay is: %s', hash.idleSetting, hash.idleTime, delay);
 
     // add a few seconds to the delay just in case
     delay += 5;
 
+    console.log('idleSetting was: %s. idleTime was: %s. delay is: %s', hash.idleSetting, hash.idleTime, delay);
+
     // trigger a delayed recheck of the screen lock && screen off
     return self._delayedRecheck(delay);
-  }).catch(function (err) {
-    if (err instanceof Error) {
-      console.error('There was an error in calculating the proper recheck delay: ', err);
-    } else if (typeof err === 'object' && err.length) {
-      console.error('There were ' + err.length + ' error(s) in calculating the proper recheck delay: ', err);
-    } else {
-      console.log('Some kind of random error occured:', err);
-    }
   });
 };
 
@@ -173,15 +183,12 @@ Switcher.prototype._delayedRecheck = function (delay) {
   var self = this;
 
   var promise = new RSVP.Promise(function (resolve, reject) {
+    console.log('checking if the screen is still locked in %s seconds', delay);
+
     setTimeout(function () {
       self.checkIfLocked()
-        .then(resolve)
-        // should never happen -- checkIfLocked doesn't throw errors
-        .catch(function (err) {
-          if (err) {
-            console.error('There was an error in checking if the screen was locked: ', err);
-            throw err;
-          }
+        .then(resolve, function (err) {
+          return reject(err);
         });
     }, delay * 1000);
   });
@@ -198,9 +205,17 @@ Switcher.prototype._delayedRecheck = function (delay) {
 Switcher.prototype.checkIfLocked = function () {
   var self = this;
 
-  return self.getInterface().then(function (iface) {
-    return self._getLockActive(iface);
-  });
+  return self.getInterface()
+    .then(function (iface) {
+      return self._getLockActive(iface);
+    })
+    .catch(function (err) {
+      if (err) {
+        throw err;
+      }
+
+      throw new Error('There was an error checking if the screen was locked');
+    });
 };
 
 /**
@@ -320,11 +335,7 @@ Switcher.prototype.switchVirtualTerminal = function () {
   // manage the switching of virtual terminals.
   return RSVP.resolve()
     .then(this._chvt(1))
-    .then(this._chvt(7))
-    .catch(function (err) {
-      console.error('There was an error switching virtual terminals:', err);
-      throw err;
-    });
+    .then(this._chvt(7));
 };
 
 /**
@@ -353,18 +364,20 @@ Switcher.prototype._chvt = function (ttyNum) {
 };
 
 Switcher.prototype.turnScreenOff = function () {
-    var promise = new RSVP.Promise(function (resolve, reject) {
-      var child = exec('xset dpms force off', {
-        encoding: 'utf8'
-      }, function (err, stdout, stderr) {
-        if (err || stderr) {
-          return reject(err || stderr);
-        }
-        return resolve();
-      });
-    });
+  var promise = new RSVP.Promise(function (resolve, reject) {
+    console.log('Turning off the screen.');
+    var child = exec('xset dpms force off', {
+      encoding: 'utf8'
+    }, function (err, stdout, stderr) {
+      if (err || stderr) {
+        return reject(err || stderr);
+      }
 
-    return promise;
+      return resolve();
+    });
+  });
+
+  return promise;
 };
 
 module.exports = Switcher;
