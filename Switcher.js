@@ -31,6 +31,7 @@ function Switcher (opts) {
     path: '/org/cinnamon/ScreenSaver',
     innaface: 'org.cinnamon.ScreenSaver',
     gsetting: 'org.cinnamon.desktop.session idle-delay',
+    recheckDelayCushion: 5,
     timeoutCheckDPMS: 3000
   };
 
@@ -55,6 +56,15 @@ Switcher.prototype.init = function () {
  * @type {Promise}
  */
 Switcher.prototype._interfacePromise = null;
+
+/**
+ * A unique ID that indicates whether we've already scheduled a recheck of the screen state.
+ * Allows prevention of duplicate rechecks, and is nulled when a recheck is complete.
+ * The unique ID may be used in the future to compare against.
+ *
+ * @type {String}
+ */
+Switcher.prototype._scheduleID = null;
 
 /**
  * Get the DBus interface to query for Screen locking.
@@ -139,12 +149,19 @@ Switcher.prototype.screenLockChanged = function (locked) {
         });
     // monitor is still on
     }, function () {
+      if (self._scheduleID) {
+        console.log('was going to schedule another recheck, but one is already scheduled. letting that one continue instead.');
+        return;
+      }
+
+      self._scheduleID = utils.generateUUID();
       console.log('screen is still on -- calculating recheck delay');
 
       self._calculateRecheckDelay()
         // trigger a delayed recheck of the screen lock && screen off
         .then(self._performDelayedRecheck.bind(self))
         .then(function (stillLocked) {
+          self._scheduleID = null;
           if (!stillLocked) {
             console.log('screen is found unlocked after delay. nothing to be done.');
             return;
@@ -155,6 +172,7 @@ Switcher.prototype.screenLockChanged = function (locked) {
           self.screenLockChanged(stillLocked);
         })
         .catch(function (err) {
+          self._scheduleID = null;
           console.error('There was an error executing the delayed recheck: ', err);
         });
     })
@@ -178,8 +196,10 @@ Switcher.prototype._calculateRecheckDelay = function () {
   }).then(function (hash) {
     var delay = hash.idleSetting - hash.idleTime;
 
-    // add a few seconds to the delay just in case
-    delay += 5;
+    if (delay <= 0) {
+      console.log('The idle time is passed -- setting a default %s second delay.', self.config.recheckDelayCushion);
+      delay = self.config.recheckDelayCushion;
+    }
 
     console.log('idleSetting was: %s. idleTime was: %s. delay is: %s', hash.idleSetting, hash.idleTime, delay);
 
