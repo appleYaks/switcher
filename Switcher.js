@@ -142,6 +142,8 @@ Switcher.prototype.screenLockChanged = function (locked) {
       console.log('screen is still on -- calculating recheck delay');
 
       self._calculateRecheckDelay()
+        // trigger a delayed recheck of the screen lock && screen off
+        .then(self._performDelayedRecheck.bind(self))
         .then(function (stillLocked) {
           if (!stillLocked) {
             console.log('screen is found unlocked after delay. nothing to be done.');
@@ -151,8 +153,9 @@ Switcher.prototype.screenLockChanged = function (locked) {
           console.log('delay is up -- trying again');
 
           self.screenLockChanged(stillLocked);
-        }, function (err) {
-          console.error('There was an error in calculating the proper recheck delay: ', err);
+        })
+        .catch(function (err) {
+          console.error('There was an error executing the delayed recheck: ', err);
         });
     })
     .catch(function (err) {
@@ -160,6 +163,12 @@ Switcher.prototype.screenLockChanged = function (locked) {
     });
 };
 
+/**
+ * Calculates the time when the system is considered idle,
+ * depending on the idle setting and the user's current idle time.
+ * @api    private
+ * @return {Promise} A Promise returning the delay needed in seconds.
+ */
 Switcher.prototype._calculateRecheckDelay = function () {
   var self = this;
 
@@ -174,12 +183,15 @@ Switcher.prototype._calculateRecheckDelay = function () {
 
     console.log('idleSetting was: %s. idleTime was: %s. delay is: %s', hash.idleSetting, hash.idleTime, delay);
 
-    // trigger a delayed recheck of the screen lock && screen off
-    return self._delayedRecheck(delay);
+    return delay;
+  })
+  .catch(function (err) {
+    console.error('There was an error in calculating the proper recheck delay: ', err);
+    throw err;
   });
 };
 
-Switcher.prototype._delayedRecheck = function (delay) {
+Switcher.prototype._performDelayedRecheck = function (delay) {
   var self = this;
 
   var promise = new RSVP.Promise(function (resolve, reject) {
@@ -188,6 +200,8 @@ Switcher.prototype._delayedRecheck = function (delay) {
     setTimeout(function () {
       self.checkIfLocked()
         .then(resolve, function (err) {
+          // need to do this since setTimeout won't allow me to
+          // return the rejected promise from self.checkIfLocked()
           return reject(err);
         });
     }, delay * 1000);
@@ -363,6 +377,12 @@ Switcher.prototype._chvt = function (ttyNum) {
   };
 };
 
+/**
+ * Turns off the screen using xset dpms.
+ *
+ * @api    public
+ * @return {Promise} A promise that fires when the screen has been turned off.
+ */
 Switcher.prototype.turnScreenOff = function () {
   var promise = new RSVP.Promise(function (resolve, reject) {
     console.log('Turning off the screen.');
