@@ -8,6 +8,12 @@ var bus = dbus.getBus('session');
 
 var utils = require('./utils');
 
+
+// catch any errors from promises missing a 'catch' function
+RSVP.on('error', function(event) {
+  console.assert(false, event.detail);
+});
+
 /**
  * An object that can manage switching ttys to
  * repaint the screen when DPMS causes tty7 to
