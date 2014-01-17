@@ -378,7 +378,9 @@ Switcher.prototype.isMonitorOff = function () {
  * Switches the virtual terminal to tty1 and back to tt7 in order to force X to repaint the screen.
  *
  * @api    public
- * @return {Promise} A promise that fires when the switching has completed.
+ * @param  {Number} first  The number of the tty to briefly switch to first.
+ * @param  {Number} second The number of the tty to switch to second. Usually you'd use this to switch back to X under tty7.
+ * @return {Promise}       A promise that fires when the switching has completed.
  */
 Switcher.prototype.switchVirtualTerminal = function (first, second) {
   // create an "immediate" promise to kick off the creation
