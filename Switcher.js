@@ -27,12 +27,23 @@ RSVP.on('error', function(err) {
  */
 function Switcher (opts) {
   this.config = {
+    // DBus parameters for the screensaver. Should work with Cinnamon and GNOME.
+    // Use a program like D-Feet to inspect for the correct values for your machine.
+    // The interface should have a `GetActive()` method and an `ActiveChanged` signal.
+    // `org.gnome.ScreenSaver` or `org.freedesktop.ScreenSaver` might be good guesses.
     service: 'org.cinnamon.ScreenSaver',
     path: '/org/cinnamon/ScreenSaver',
     innaface: 'org.cinnamon.ScreenSaver',
+
+    // Gsetting for the period of time before the session is considered idle.
+    // Use a program like dconf-editor to check. Switch this to GNOME if that's what you use.
+    // For that the setting might be `org.gnome.desktop.session idle-delay`.
     gsetting: 'org.cinnamon.desktop.session idle-delay',
+
+    // The amount of time to wait if a recheck of the screen's lock and power states determines
+    // that the screen is still on after the idle period has been passed. The screen might need
+    // just a few more seconds to turn off before the script can do its thing.
     recheckDelayCushion: 5,
-    timeoutCheckDPMS: 3000
   };
 
   utils.extend(this.config, opts);
@@ -98,8 +109,8 @@ Switcher.prototype.getInterface = function () {
 };
 
 /**
- * Register a callback for when the lock/unlock message
- * is triggered from the DBus after a screen lock/unlock event.
+ * Register a callback for when a message is triggered
+ * from the DBus after a screen lock/unlock event.
  *
  * @api    private
  * @return {Switcher} The switcher object for chaining.
@@ -122,7 +133,7 @@ Switcher.prototype.registerLockEvent = function () {
  * A callback that's called by DBus when the screen is locked or unlocked.
  *
  * @api    private
- * @param  {boolean} locked Tells whether the screen is locked or unlocked.
+ * @param  {Boolean} locked Tells whether the screen is locked or unlocked.
  * @return {undefined}      A return value isn't useful here as this function's being called by a DBus event.
  */
 Switcher.prototype.screenLockChanged = function (locked) {
@@ -140,7 +151,7 @@ Switcher.prototype.screenLockChanged = function (locked) {
     .then(function () {
       console.log('screen was off when locked -- switching terminals');
 
-      return self.switchVirtualTerminal()
+      return self.switchVirtualTerminal(1, 7)
         .then(self.turnScreenOff, function (err) {
           console.error('There was an error switching virtual terminals: ', err);
         })
@@ -184,6 +195,7 @@ Switcher.prototype.screenLockChanged = function (locked) {
 /**
  * Calculates the time when the system is considered idle,
  * depending on the idle setting and the user's current idle time.
+ *
  * @api    private
  * @return {Promise} A Promise returning the delay needed in seconds.
  */
@@ -211,6 +223,13 @@ Switcher.prototype._calculateRecheckDelay = function () {
   });
 };
 
+/**
+ * Wait the specified period, then resolve whether the screen is locked through a promise.
+ *
+ * @api    private
+ * @param  {Number} delay The delay period in seconds.
+ * @return {Promise}      A promise that fires when the delay period is up and after the screen's lock state has been checked.
+ */
 Switcher.prototype._performDelayedRecheck = function (delay) {
   var self = this;
 
@@ -334,24 +353,22 @@ Switcher.prototype.isMonitorOff = function () {
 
   var promise = new RSVP.Promise(function (resolve, reject) {
     // give ourselves a few seconds for the screen to settle down
-    setTimeout(function () {
-      var child = exec('xset q', {
-        encoding: 'utf8'
-      }, function (err, stdout, stderr) {
-        if (err || stderr) {
-          return reject(err || stderr);
-        }
+    var child = exec('xset q', {
+      encoding: 'utf8'
+    }, function (err, stdout, stderr) {
+      if (err || stderr) {
+        return reject(err || stderr);
+      }
 
-        var screenOff = /Monitor is Off/.test(stdout);
-        if (screenOff) {
-          return resolve(screenOff);
-        }
+      var screenOff = /Monitor is Off/.test(stdout);
+      if (screenOff) {
+        return resolve(screenOff);
+      }
 
-        // reject if screen is on in order to chain
-        // promises more easily on the resolve code path
-        return reject(new Error('Screen is still on.'));
-      });
-    }, self.config.timeoutCheckDPMS);
+      // reject if screen is on in order to chain
+      // promises more easily on the resolve code path
+      return reject(new Error('Screen is still on.'));
+    });
   });
 
   return promise;
@@ -363,13 +380,13 @@ Switcher.prototype.isMonitorOff = function () {
  * @api    public
  * @return {Promise} A promise that fires when the switching has completed.
  */
-Switcher.prototype.switchVirtualTerminal = function () {
+Switcher.prototype.switchVirtualTerminal = function (first, second) {
   // create an "immediate" promise to kick off the creation
   // of the functions that in turn create the promises that
   // manage the switching of virtual terminals.
   return RSVP.resolve()
-    .then(this._chvt(1))
-    .then(this._chvt(7));
+    .then(this._chvt(first))
+    .then(this._chvt(second));
 };
 
 /**
