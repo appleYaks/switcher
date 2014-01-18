@@ -41,7 +41,18 @@ If you're using GNOME and not Cinnamon, you'll need to change a few lines from t
 
 ### Make the script run on login
 
-It's preferred to do it this way so that it runs as your user, and not as root. You can do this in the System Settings application in Cinnamon under "Startup Programs". The file it should point to is `daemon.js`.
+It's preferred to do it this way so that it runs as your user, and not as root. You can do this in the System Settings application in Cinnamon under "Startup Programs". The file it should point to is `daemon.js`. Make sure the node executable is included in your `$PATH` in `~/.profile`, otherwise starting the script will error with `/usr/bin/env: node: No such file or directory`. Here's a sample:
+
+```bash
+# ~/.profile
+
+# putting this line in ~/.profile and not ~/.bash_profile
+# or ~/.bashrc ensures that GNOME or Cinnamon can find node
+# and load the script as a Startup Application. Replace
+# `/opt/node/bin` with wherever your node binary is.
+# Find out with the command, `which node`.
+PATH=$PATH:/opt/node/bin
+```
 
 ## If it doesn't work
 
