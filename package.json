@@ -1,7 +1,7 @@
 {
-  "name": "screen-dbus",
+  "name": "switcher",
   "version": "0.0.0",
-  "description": "",
+  "description": "Workaround for a particular bug in X Server.",
   "main": "daemon.js",
   "dependencies": {
     "dbus": "~0.2.8",
@@ -12,6 +12,6 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node daemon.js"
   },
-  "author": "",
+  "author": "David Arvelo",
   "license": "ISC"
 }
