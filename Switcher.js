@@ -40,6 +40,8 @@ function Switcher (opts) {
     // that the screen is still on after the idle period has been passed. The screen might need
     // just a few more seconds to turn off before the script can do its thing.
     recheckDelayCushion: 5,
+    // The amount of time in seconds to wait before turning off the screen after switching terminals
+    screenOffDelay: 1
   };
 
   utils.extend(this.config, opts);
@@ -385,17 +387,21 @@ Switcher.prototype._chvt = function (ttyNum) {
  * @return {Promise} A promise that fires when the screen has been turned off.
  */
 Switcher.prototype.turnScreenOff = function () {
-  var promise = new RSVP.Promise(function (resolve, reject) {
-    console.log('Turning off the screen.');
-    var child = exec('xset dpms force off', {
-      encoding: 'utf8'
-    }, function (err, stdout, stderr) {
-      if (err || stderr) {
-        return reject(err || stderr);
-      }
+  var self = this;
 
-      return resolve();
-    });
+  var promise = new RSVP.Promise(function (resolve, reject) {
+    setTimeout(function () {
+      console.log('Turning off the screen.');
+      var child = exec('xset dpms force off', {
+        encoding: 'utf8'
+      }, function (err, stdout, stderr) {
+        if (err || stderr) {
+          return reject(err || stderr);
+        }
+
+        return resolve();
+      });
+    }, self.config.screenOffDelay * 1000);
   });
 
   return promise;
