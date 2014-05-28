@@ -136,7 +136,7 @@ Switcher.prototype.screenLockChanged = function (locked) {
       console.log('screen was off when locked -- switching terminals');
 
       return self.switchVirtualTerminal(1, 7)
-        .then(self.turnScreenOff, function (err) {
+        .then(self.turnScreenOff.bind(self), function (err) {
           console.error('There was an error switching virtual terminals: ', err);
         })
         .then(null, function (err) {
@@ -319,8 +319,6 @@ Switcher.prototype.getIdleTime = function () {
  * @return {Promise} A promise that resolves if the screen is off and rejects if the screen is on or if there's an error/stderror.
  */
 Switcher.prototype.isMonitorOff = function () {
-  var self = this;
-
   var promise = new RSVP.Promise(function (resolve, reject) {
     // give ourselves a few seconds for the screen to settle down
     var child = exec('xset q', {
@@ -355,8 +353,8 @@ Switcher.prototype.switchVirtualTerminal = function (first, second) {
   // of the functions that in turn create the promises that
   // manage the switching of virtual terminals.
   return RSVP.resolve()
-    .then(this._chvt(first))
-    .then(this._chvt(second));
+    .then(this._chvt.bind(this, first)())
+    .then(this._chvt.bind(this, second)());
 };
 
 /**
