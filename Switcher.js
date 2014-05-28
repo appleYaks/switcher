@@ -16,13 +16,9 @@ RSVP.on('error', function(err) {
 });
 
 /**
- * An object that can manage switching ttys to
- * repaint the screen when DPMS causes tty7 to
- * become distorted with weird artifacts. This is
- * only problematic when the lock screen is
+ * An object that can manage switching ttys to repaint the screen when DPMS causes tty7 to
+ * become distorted with weird artifacts. This is only problematic when the lock screen is
  * activated, so Swticher handles that case.
- *
- * @api   public
  * @param {Object} opts A configuration object.
  */
 function Switcher (opts) {
@@ -51,8 +47,6 @@ function Switcher (opts) {
 
 /**
  * Initialize the Switcher instance.
- *
- * @api    public
  * @return {Switcher} The switcher instance for chaining.
  */
 Switcher.prototype.init = function () {
@@ -61,9 +55,7 @@ Switcher.prototype.init = function () {
 };
 
 /**
- * Holds the promise returned by `getInterface`
- * to return it immediately on subsequent calls.
- *
+ * Holds the promise returned by `getInterface` to return it immediately on subsequent calls.
  * @type {Promise}
  */
 Switcher.prototype._interfacePromise = null;
@@ -72,15 +64,12 @@ Switcher.prototype._interfacePromise = null;
  * A unique ID that indicates whether we've already scheduled a recheck of the screen state.
  * Allows prevention of duplicate rechecks, and is nulled when a recheck is complete.
  * The unique ID may be used in the future to compare against.
- *
  * @type {String}
  */
 Switcher.prototype._scheduleID = null;
 
 /**
  * Get the DBus interface to query for Screen locking.
- *
- * @api    public
  * @return {Promise} A promise to chain methods to.
  */
 Switcher.prototype.getInterface = function () {
@@ -109,10 +98,7 @@ Switcher.prototype.getInterface = function () {
 };
 
 /**
- * Register a callback for when a message is triggered
- * from the DBus after a screen lock/unlock event.
- *
- * @api    private
+ * Register a callback for when a message is triggered from the DBus after a screen lock/unlock event.
  * @return {Switcher} The switcher object for chaining.
  */
 Switcher.prototype.registerLockEvent = function () {
@@ -131,8 +117,6 @@ Switcher.prototype.registerLockEvent = function () {
 
 /**
  * A callback that's called by DBus when the screen is locked or unlocked.
- *
- * @api    private
  * @param  {Boolean} locked Tells whether the screen is locked or unlocked.
  * @return {undefined}      A return value isn't useful here as this function's being called by a DBus event.
  */
@@ -195,8 +179,6 @@ Switcher.prototype.screenLockChanged = function (locked) {
 /**
  * Calculates the time when the system is considered idle,
  * depending on the idle setting and the user's current idle time.
- *
- * @api    private
  * @return {Promise} A Promise returning the delay needed in seconds.
  */
 Switcher.prototype._calculateRecheckDelay = function () {
@@ -225,8 +207,6 @@ Switcher.prototype._calculateRecheckDelay = function () {
 
 /**
  * Wait the specified period, then resolve whether the screen is locked through a promise.
- *
- * @api    private
  * @param  {Number} delay The delay period in seconds.
  * @return {Promise}      A promise that fires when the delay period is up and after the screen's lock state has been checked.
  */
@@ -251,8 +231,6 @@ Switcher.prototype._performDelayedRecheck = function (delay) {
 
 /**
  * Determines if the screen is locked.
- *
- * @api    public
  * @return {Promise} A promise that will return a boolean for locked/unlocked.
  */
 Switcher.prototype.checkIfLocked = function () {
@@ -274,8 +252,6 @@ Switcher.prototype.checkIfLocked = function () {
 /**
  * Private function that determines if the screen is locked.
  * This actually generates the promised used in the public method.
- *
- * @api    private
  * @param  {Object} iface The handle for the DBus interface.
  * @return {Promise}      A promise returning the boolean for locked/unlocked.
  */
@@ -292,8 +268,6 @@ Switcher.prototype._getLockActive = function (iface) {
 /**
  * Queries gsettings for the system session configuration of how long
  * a delay should be before the system is determined to be idle.
- *
- * @api    public
  * @return {Promise} A promise returning the number of seconds of inactivity before the session is considered idle.
  */
 Switcher.prototype.getIdleSetting = function () {
@@ -321,8 +295,6 @@ Switcher.prototype.getIdleSetting = function () {
 
 /**
  * Queries the X server for the user's idle time thus far.
- *
- * @api    public
  * @return {Promise} The user's idle time so far, in seconds.
  */
 Switcher.prototype.getIdleTime = function () {
@@ -344,8 +316,6 @@ Switcher.prototype.getIdleTime = function () {
 
 /**
  * Uses xset's DPMS feature to tell whether the screen is currently powered off.
- *
- * @api    public
  * @return {Promise} A promise that resolves if the screen is off and rejects if the screen is on or if there's an error/stderror.
  */
 Switcher.prototype.isMonitorOff = function () {
@@ -376,8 +346,6 @@ Switcher.prototype.isMonitorOff = function () {
 
 /**
  * Switches the virtual terminal to tty1 and back to tt7 in order to force X to repaint the screen.
- *
- * @api    public
  * @param  {Number} first  The number of the tty to briefly switch to first.
  * @param  {Number} second The number of the tty to switch to second. Usually you'd use this to switch back to X under tty7.
  * @return {Promise}       A promise that fires when the switching has completed.
@@ -394,8 +362,6 @@ Switcher.prototype.switchVirtualTerminal = function (first, second) {
 /**
  * Return a function that should be called as a parameter to a `.then`,
  * which returns a promise after the virtual terminal has been switched.
- *
- * @api    private
  * @param  {Number} ttyNum The number of the tty you want to switch to.
  * @return {Function}      A function to be called as a parameter to `.then()`, and returns a promise.
  */
@@ -418,8 +384,6 @@ Switcher.prototype._chvt = function (ttyNum) {
 
 /**
  * Turns off the screen using xset dpms.
- *
- * @api    public
  * @return {Promise} A promise that fires when the screen has been turned off.
  */
 Switcher.prototype.turnScreenOff = function () {
