@@ -41,7 +41,7 @@ function Switcher (opts) {
     // just a few more seconds to turn off before the script can do its thing.
     recheckDelayCushion: 5,
     // The amount of time in seconds to wait before turning off the screen after switching terminals
-    screenOffDelay: 1
+    screenOffDelay: 0.2
   };
 
   utils.extend(this.config, opts);
