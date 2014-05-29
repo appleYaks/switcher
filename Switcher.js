@@ -351,35 +351,31 @@ Switcher.prototype.isMonitorOff = function () {
  * @return {Promise}       A promise that fires when the switching has completed.
  */
 Switcher.prototype.switchVirtualTerminal = function (first, second) {
-  // create an "immediate" promise to kick off the creation
-  // of the functions that in turn create the promises that
-  // manage the switching of virtual terminals.
+  // create an "immediate" promise to kick off the switching of virtual terminals.
   return RSVP.resolve()
-    .then(this._chvt.bind(this, first)())
-    .then(this._chvt.bind(this, second)());
+    .then(this._chvt.bind(this, first))
+    .then(this._chvt.bind(this, second));
 };
 
 /**
  * Return a function that should be called as a parameter to a `.then`,
  * which returns a promise after the virtual terminal has been switched.
  * @param  {Number} ttyNum The number of the tty you want to switch to.
- * @return {Function}      A function to be called as a parameter to `.then()`, and returns a promise.
+ * @return {Promise}       A promise that resolves when the virtual terminal change is complete.
  */
 Switcher.prototype._chvt = function (ttyNum) {
-  return function () {
-    var promise = new RSVP.Promise(function (resolve, reject) {
-      var child = exec('sudo chvt ' + ttyNum, {
-        encoding: 'utf8'
-      }, function (err, stdout, stderr) {
-        if (err || stderr) {
-          return reject(err || stderr);
-        }
-        return resolve();
-      });
+  var promise = new RSVP.Promise(function (resolve, reject) {
+    var child = exec('sudo chvt ' + ttyNum, {
+      encoding: 'utf8'
+    }, function (err, stdout, stderr) {
+      if (err || stderr) {
+        return reject(err || stderr);
+      }
+      return resolve();
     });
+  });
 
-    return promise;
-  };
+  return promise;
 };
 
 /**
